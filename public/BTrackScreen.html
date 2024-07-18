@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>HTML !DOCTYPE declaration</title>
+    
+    <style type="text/css">
+        body        { font: 16px sans-serif; line-height: 1.8; padding: 0 40px; margin-bottom: 200px; }
+      .inputActive  { border:solid 2px #D2691E; background: #dcdcdc; }
+      .titleTable   { text-align: center; font-weight:bold; background: #aadada; }
+      table         { width: 100%; border: 1px solid #444444; }
+      tr            { height: 20px; }
+      .titleTr      { background: #daaada; text-align: center; }
+      .pkTr         { background: #babadd; }
+      td            { border: 1px solid #B9B9B9; }
+      th            { border: 1px solid #B9B9B9; font-weight: bold; text-align: center; }
+      div           { border: 1px solid #a9a9a9; background: #CDCDCD}
+      .noselect {
+        -webkit-touch-callout   : none;
+        -webkit-user-select     : none;
+        -khtml-user-select      : none;
+        -moz-user-select        : none;
+        -ms-user-select         : none;
+        user-select             : none;
+      }
+      .inputTable               { width:300px; }
+      .inputColumn              { width:150px; }
+      .pop-layer .pop-container { padding: 20px 25px; }
+      .pop-layer p.ctxt         { color: #666; line-height: 25px; }
+      .pop-layer .btn-r {
+        width: 100%;
+        margin: 10px 0 20px;
+        padding-top: 10px;
+        border-top: 1px solid #DDD;
+        text-align: center;
+      }
+      .pop-layer {
+        display: none;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: auto;
+        height: auto;
+        background-color: #fff;
+        border: 5px solid #3571B5;
+        z-index: 10;
+        text-align: center;
+      }
+      .btn-delColInfo {
+        cursor:pointer;
+      }
+      .edit-activefocus{
+        background-color: #FFFF55;
+      }
+      .container {
+        border: solid 4px #fa9664;
+        cursor: pointer;
+        background-color: rgba(243, 243, 243, 0.5);
+        height: 35px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #virtualTable.dragStart{
+        width   :236px;
+        height  :40px;
+        border: 4px solid #fa9664;
+        background:rgba(0,0,0,0.1);
+      }
+      #virtualGroup.dragStart{
+        width   :316px;
+        height  :80px;
+        border: 4px solid #fa9664;
+        background:rgba(0,0,0,0.1);
+      }
+      #virtualImage.dragStart{
+        width   :316px;
+        height  :160px;
+        border: 4px solid #fa9664;
+        background:rgba(0,0,0,0.1);
+      }
+      #virtualCon.dragStart{
+        width: 40px;
+        height: 40px;
+        border: 4px solid #fa9664;
+        background:rgba(0,0,0,0.1);
+      }
+    </style>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script charset="UTF-8" type="text/javascript" src="../js/BTrackGraphics.js"></script>
+	
+    <script charset="UTF-8" type="text/javascript">
+        var charvesCanvas = null;
+        var screenDesigner = null;
+        var dc          = null;
+        var imsiCnt     = 0;
+        var firNode     = null;
+        var secNode     = null;
+        var editNode    = null;
+        var editClsName = '';
+        var maxId       = 0;
+        var ctrlKey     = 17;
+        var cmdKey      = 91;
+        var vKey        = 86;
+        var cKey        = 67;
+        var delKey      = 46;
+        var isEditMode  = false;
+        var curFileName = '';
+        var layerName   = '';
+        var dragName    = "";
+        
+        function strLpad(str, len, ch){
+            while(str.length() < len){
+                str = ch + str;
+            }
+            return str;
+        }
+
+        $(document).keydown(function(e) {
+            if (e.keyCode == ctrlKey || e.keyCode == cmdKey) {
+                SD_Env.ctrlDown = true;
+            } else if(e.keyCode == cKey && SD_Env.ctrlDown){
+                if(!isEditMode) copySelect();
+            } else if(e.keyCode == 37){                 // Left
+                if(!isEditMode) screenDesigner.moveOneStep("L");
+            } else if(e.keyCode == 38){                 // Up
+                if(!isEditMode) screenDesigner.moveOneStep("U");
+            } else if(e.keyCode == 39){                 // Right
+                if(!isEditMode) screenDesigner.moveOneStep("R");
+            } else if(e.keyCode == 40){                 // Down
+                if(!isEditMode) screenDesigner.moveOneStep("D");
+            } else if(e.keyCode == delKey){
+                if(!isEditMode && SD_Env.isEditable) delBox();
+            } else if(e.keyCode == 27){
+                if(layerName == "#miniMapLayer"){
+                    $("#mapCloseBtn").click();
+                }else{
+                    $(layerName).find('a.btn-layerClose').click();
+                }
+            }
+        }).keyup(function(e) {
+            if (e.keyCode == ctrlKey || e.keyCode == cmdKey) {
+                SD_Env.ctrlDown = false;
+            }
+        });
+        
+
+        $(function(){
+            $("#radSelOpt1").on("change", function(){
+                SD_Env.selMode = 1;
+            });
+            $("#radSelOpt2").on("change", function(){
+                SD_Env.selMode = 2;
+            });
+            $("#radSelOpt3").on("change", function(){
+                SD_Env.selMode = 3;
+            });
+            $("#radLine1").on("change", function(){
+                SD_Env.lineMode = "solidLine";      //실선
+            });
+            $("#radLine2").on("change", function(){
+                SD_Env.lineMode = "dashLine";
+            });
+            $("#jsonLayer").find('a.btn-layerClose').on("click", function(){
+                $("#jsonLayer").fadeOut();
+                editNode = null;
+                isEditMode = false;
+                return;
+            });
+            $("#jsonLayer").find('a.btn-tableAdd').on("click", function(){
+                screenDesigner.addFromJsonText($("#jsonText").val());
+                $("#jsonLayer").fadeOut();
+                editNode = null;
+                isEditMode = false;
+                return;
+            });
+            $("#popLayer").find('a.btn-layerClose').on("click", function(){
+                $("#popLayer").fadeOut();
+                editNode = null;
+                isEditMode = false;
+                $("#jobId").attr("disabled", false);
+                return;
+            });
+            $("#popLayer").find('a.btn-tableAdd').on("click", function(){
+                if(editNode != null){ /* 편집모드 */
+                    editNode.text       = $("#jobTitle").val();
+                    editNode.bodyColor  = $("#boxColor").val();
+                }else{                /* 추가모드 */
+                    let snap            = screenDesigner.snap;
+                    let canvasWidth     = $('#charvesCanvas').width();
+                    let canvasHeight    = $('#charvesCanvas').height();
+                    let xPoint          = Math.floor((canvasWidth / 2 - 110)/snap) * snap;
+                    let yPoint          = Math.floor((canvasHeight / 2 - 20)/snap) * snap;
+                    let addResult       = screenDesigner.addBiBox($("#jobTitle").val()
+                                                                , S2R_X(xPoint)
+                                                                , S2R_Y(yPoint) 
+                                                                , 220
+                                                                , 40
+                                                                , $("#boxColor").val()
+                                                                , $("#jobId").val()
+                                                                );
+                    if(addResult.clsName == 'addBiBox_Error'){
+                        alert(addResult.msgInfo);
+                        return;
+                    }
+                }
+                
+                $("#popLayer").fadeOut();
+                editNode = null;
+                isEditMode = false;
+                $("#jobId").attr("disabled", false);
+                screenDesigner.drawAll();
+                return;
+            });
+            // $("#popLayer").on("keydown", function(event){
+            //     if(event.keyCode == 27) $("#popLayer").find('a.btn-layerClose').click();
+            // });
+            $("#fileLayer").find('a.btn-layerClose').on("click", function(){
+                $("#fileLayer").fadeOut();
+                return;
+            });
+            $("#fileLayer").find('a.btn-fileSave').on("click", function(){
+                if($("#saveFileName").val() == '') {
+                    alert("파일명을 입력하세요");
+                    return;
+                }
+                FileSave($("#saveFileName").val());
+                $("#fileLayer").fadeOut();
+                return;
+            });
+            $("#imageLayer").find('a.btn-layerClose').on("click", function(){
+                $("#imageLayer").fadeOut();
+                return;
+            });
+            $("#imageLayer").find('a.btn-imageSave').on("click", function(){
+                if($("#saveImageName").val() ==''){
+                    alert("파일명을 입력하세요");
+                    return;
+                }
+                ImageSave($("#saveImageName").val());
+                $("#imageLayer").fadeOut();
+                return;
+            });
+            // $("#searchLayer").find('a.btn-allChange').on("click", function(){
+            //     if(SD_Env.isEditable){
+            //         screenDesigner.NodeAllChange($("#searchText").val(), $("#chgColor").val());
+            //     }else{
+            //         alert("아숩게도 읽기전용에서는 변경불가합니다.");
+            //     }
+            // });
+            $("#searchLayer").find('a.btn-layerClose').on("click", function(){
+                $("#searchLayer").fadeOut();
+                return;
+            });
+            $("#searchLayer").find("a.btn-searchDo").on("click", function(){
+                screenDesigner.searchInData($("#searchText").val(), function(data){
+                    SD_Env.curSearchNm = "";
+                    SD_Env.curSearchId = "";
+                    alert("못찾겠다 꽤꼬리 : " + $("#searchText").val());
+                });
+            });
+            $("#selAllChangeLayer").find("a.btn-allChange").on("click", function(){
+                screenDesigner.selItemAllChange($("#boxColorAll").val());
+                $("#selAllChangeLayer").fadeOut();
+            });
+            $("#selAllChangeLayer").find("a.btn-layerClose").on("click", function(){
+                $("#selAllChangeLayer").fadeOut();
+            });
+            $("#miniMapLayer").find('a.btn-layerClose').on("click", function(){
+                $("#miniMapLayer").fadeOut();
+                return;
+            });
+            $("#saveFileName").on('keydown', function(event){
+                if(event.keyCode == 13) $("#fileLayer").find('a.btn-fileSave').click();
+//                if(event.keyCode == 27) $("#fileLayer").find('a.btn-layerClose').click();
+            });
+            $("#searchText").on('keydown', function(event){
+                if(event.keyCode == 13) $("#searchLayer").find('a.btn-searchDo').click();
+//                if(event.keyCode == 27) $("#searchLayer").find('a.btn-layerClose').click();
+            });
+
+            var w = 0, h = 0;
+            if (typeof (window.innerWidth) == 'number') { //Chrome
+                w = window.innerWidth;
+                h = window.innerHeight;
+            } else if (document.documentElement && (document.documentElement.clientWidth || document.documentElement.clientHeight)) {
+                w = document.documentElement.clientWidth;
+                h = document.documentElement.clientHeight;
+            } else if (document.body && (document.body.clientWidth || document.body.clientHeight)) { //IE9
+                w = document.body.clientWidth;
+                h = document.body.clientHeight;
+            }
+
+            charvesCanvas = document.getElementById("charvesCanvas");
+            charvesCanvas.width = w-4;
+            charvesCanvas.height = h-4;
+
+            dc = charvesCanvas.getContext('2d');
+            screenDesigner = new ScreenDesigner('charvesCanvas');
+            screenDesigner.dc = dc;
+            screenDesigner.gridColor = '#969696';
+            screenDesigner.drawAll();
+
+            $("#virtualTable").draggable({
+                start:function(event){
+                    dragName = 'virtualTable';
+                    $(this).addClass("dragStart");
+                },
+                stop:function(event){
+                    // var Stoppos = $(this).position();
+                    // console.log(Stoppos.left + ", " + Stoppos.top);
+                }
+            });
+
+            $("#virtualGroup").draggable({
+                start:function(event){
+                    dragName = 'virtualGroup';
+                    $('#virtualGroup').addClass("dragStart");
+                    $('#virtualGroup').css('height', '80px');
+                },
+                stop:function(event){
+                    //
+                }
+            });
+
+            $("#virtualImage").draggable({
+                start:function(event){
+                    dragName = 'virtualImage';
+                    $(this).addClass("dragStart");
+                    $('#virtualImage').css('height', '160px');
+                },
+                stop:function(event){
+                    //
+                }
+            });
+
+            $("#virtualCon").draggable({
+                start:function(event){
+                    dragName = 'virtualCon';
+                    $(this).addClass("dragStart");
+                    $('#virtualCon').css('height', '40px');
+                },
+                stop:function(event){
+                    //
+                }
+            });
+
+            $("#virtualQuat").draggable({
+                start:function(event){
+                    dragName = 'virtualQuat';
+                    $(this).addClass("dragStart");
+                    $('#virtualQuat').css('height', '40px');
+                },
+                stop:function(event){
+                    //
+                }
+            });
+
+            $("#charvesCanvas").droppable({
+                drop: function (event, ui) {            // drop되었을때 발생
+                    var $newPosX = ui.offset.left - $(this).offset().left;
+                    var $newPosY = ui.offset.top - $(this).offset().top;
+                    
+                    //Math.floor($newPosX/screenDesigner.snap) * screenDesigner.snap;
+
+                    if(dragName == 'virtualTable'){
+                        let addResult   = screenDesigner.addBiBox('신규노드'
+                                                        , S2R_X(Math.floor($newPosX/screenDesigner.snap) * screenDesigner.snap)
+                                                        , S2R_Y(Math.floor($newPosY/screenDesigner.snap) * screenDesigner.snap) 
+                                                        , 240
+                                                        , 40
+                                                        , '#DFDFDF'
+                                                        , null
+                                                        );
+                    }else if(dragName == 'virtualGroup'){
+                        let addResult   = screenDesigner.addBiGroup('신규그룹'
+                                                        , S2R_X(Math.floor($newPosX/screenDesigner.snap) * screenDesigner.snap)
+                                                        , S2R_Y(Math.floor($newPosY/screenDesigner.snap) * screenDesigner.snap) 
+                                                        , 320
+                                                        , 80
+                                                        , '#c8c8c8'
+                                                        , null
+                                                        );
+                    }else if(dragName =='virtualImage'){
+                        loadImgFile(
+                            S2R_X(Math.floor($newPosX/screenDesigner.snap) * screenDesigner.snap)
+                        ,   S2R_Y(Math.floor($newPosY/screenDesigner.snap) * screenDesigner.snap) 
+                        );
+                    }else if(dragName == 'virtualCon'){
+                        let addResult   = screenDesigner.addBiCon(
+                              'A'
+                            , S2R_X(Math.floor($newPosX/screenDesigner.snap) * screenDesigner.snap + 20)
+                            , S2R_Y(Math.floor($newPosY/screenDesigner.snap) * screenDesigner.snap + 20)
+                            , 20
+                            , '#DFDFDF'
+                            , null
+                        );
+                    }else if(dragName == 'virtualQuat'){
+                        let addResult   = screenDesigner.addBiQuat('A,3, <, =, >',
+                              S2R_X(Math.floor($newPosX/screenDesigner.snap) * screenDesigner.snap + 20)
+                            , S2R_Y(Math.floor($newPosY/screenDesigner.snap) * screenDesigner.snap + 20)
+                            , 20
+                            , 20
+                            , '#DFDFDF'
+                            , null
+                        );
+                    }
+                    // console.log(addResult);
+                    screenDesigner.drawAll();
+
+                    $("#" + dragName).removeClass("dragStart");
+                    $("#" + dragName).css("left", 0);
+                    $("#" + dragName).css("top", 0);
+                    if(dragName == 'virtualGroup') $('#virtualGroup').css('height', '40px');
+                    if(dragName == 'virtualImage') $('#virtualImage').css('height', '40px');
+                }
+            });
+            
+            // 편집 팝업을 연결하는 세팅
+            // 이부분을 가만 보면 진짜 자바스크립트 ... 참 잘만든거 같다.
+            // 이야... 만일 이걸 자바로 구현하려 했다면 추상클레스 만들고 지랄떨었을텐데..
+            // 이건 뭐... 걍 되뿌네 ㅎ
+            screenDesigner.setBiEditFunction(function(editBiNode, clsName){
+                editClsName     = clsName;
+                editNode        = editBiNode;
+                $("#jobId"      ).val(editNode.id);
+                $("#jobId"      ).attr("disabled", true);
+                $("#jobTitle"   ).val(editNode.text);
+                $("#boxColor"   ).val(editNode.bodyColor);
+                
+                let $el         = $("#popLayer");
+                let $elWidth    = $el.outerWidth();
+                let $elHeight   = $el.outerHeight();
+                let docWidth    = $(document).width();
+                let docHeight   = $(document).height();
+
+                $el.fadeIn();
+                isEditMode = true;
+                if ($elHeight < docHeight || $elWidth < docWidth) {
+                    $el.css({
+                        marginTop   : -$elHeight / 2,
+                        marginLeft  : -$elWidth  / 2
+                    });
+                } else {
+                    $el.css({top: 0, left: 0});
+                }
+                $("#jobTitle").focus();
+                layerName = "#popLayer";
+            });
+
+            //let box1 = screenDesigner.addBiBox("첫번째놈이고", 100, 100, 200, 400, '#FFAADD', 'charves1');
+            //let box2 = screenDesigner.addBiBox("두번째놈이고", 500, 300, 200, 80, '#FFAADD', 'charves2');
+            //screenDesigner.addBiRelly('charves1', 'charves2');
+            
+            // screenDesigner.addBiQuat('A > 209', 200, 200, 80, 60, '#DFDFDF', null);
+            // screenDesigner.addBiQuat('눈물의의미눈물의의미눈물의의미눈물의의미' , 400, 500, 80, 60, '#DFDFDF', null);
+            screenDesigner.drawAll();
+            
+
+
+			$(window).on("beforeunload", function(){
+				return true;
+			}); 
+        });
+        
+        
+		
+//        document.onkeydown = doNotReload;
+    </script>
+</head>
+<body onresize="resetScreen();">
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <canvas id="charvesCanvas" width='1900' height='950' style="position:absolute; left:0px; top:0px; border:solid 1px #000000; z-index:1;">
+    </canvas>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+
+
+    <div id="leftMenuBar" style="position:absolute; left:0px; top:31px; width:60px; height:217px; z-index:10; background: rgba(200,200,200,0.5);" >
+        <div id="virtualTable" class="drag noselect" style="border:solid 4px #fa9664; cursor:pointer; background-color: rgba(243,243,243,0.5); height:35px;">Box</div>
+        <div id="virtualGroup" class="drag noselect" style="border:solid 4px #fa9664; cursor:pointer; background-color: rgba(243,243,243,0.5); height:35px;">Group</div>
+        <div id="virtualImage" class="drag noselect" style="border:solid 4px #fa9664; cursor:pointer; background-color: rgba(243,243,243,0.5); height:35px;">Image</div>
+        <div id="virtualCon"   class="container drag noselect" style="border:solid 4px #fa9664; cursor:pointer; background-color: rgba(243,243,243,0.5); height:35px;">
+            <img style="width:35px; height:35px;" src="../img/BiCon_001.png"/>
+        </div>
+        <div id="virtualQuat"  class="container drag noselect" style="border:solid 4px #fa9664; cursor:pointer; background-color: rgba(243,243,243,0.5); height:35px;">
+            <img style="width:35px; height:35px;" src="../img/BiQuat_001.png"/>
+        </div>
+
+    </div>
+    <div id="leftMenuLock" style="position:absolute; left:0px; top:31px; width:60px; height:217px; z-index:11; background: rgba(100,100,100,0.7);" >
+    </div>
+
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <div id="readOnlyBar" style="position:absolute; left:0px; top:0px; z-index:10; display:block; background-color:#FFA0A0">
+        <input type="button" value="풀기"           onclick="setScreenLock(false)" style="background-color:#A0FFFF;"/>
+        <input type="button" value="읽어오기"       onclick="loadFile();" />
+        <input type="button" value="검색"           onclick="searchPopup();"   />
+        <input type="button" value="지도"           onclick="showMap()"     />
+    </div>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <div id="menuBar" style="position:absolute; left:0px; top:0px; z-index:10; display:none; background-color:#A0FFFF;">
+        <input type="button" value="파일저장"       onclick="fileSavePopup();"  />
+        <!-- <input type="button" value="이미지"         onclick="loadImgFile();"/> -->
+        <input type="button" value="화면캡처"       onclick="imgSavePopup();"/>
+        <input type="button" value="읽어오기"       onclick="loadFile();" />
+        <!-- <input type="button" value="추가(*)"        onclick="newBoxAdd();"     /> -->
+        <!-- <input type="button" value="그룹추가(*)"    onclick="newGroupAdd();"     /> -->
+        <input type="button" value="항목삭제"       onclick="delBox();"        />
+        <input type="button" value="검색"           onclick="searchPopup();"   />
+        <div style="display:inline; background-color:#80FF80">
+            <input type="radio" name="radSelOpt" id="radSelOpt1" value="1">개별선택
+            <input type="radio" name="radSelOpt" id="radSelOpt2" checked="checked" value="2">그룹선택
+            <input type="radio" name="radSelOpt" id="radSelOpt3" value="3">연결선택
+        </div>
+        <div style="display:inline; background-color:#FF80FF">
+            <input type="radio" name="radLine" id="radLine1" checked="checked" value="S">실선
+            <input type="radio" name="radLine" id="radLine2" value="D">점선
+        </div>
+        <!-- <input type="text" id="basColor" class="colorPicker" value="#ff6161"> -->
+        <input type="button" value="지도"    onclick="showMap()"     />
+        <input type="button" value="JSON"    onclick="jsonJob()"     />
+        <input type="button" value="일괄변경" onclick="allChangePop()" />
+        <input type="button" value="잠금"    onclick="setScreenLock(true)" style="background-color:#FFA0A0"/>
+    </div>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    
+
+
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <div id="popLayer" class="pop-layer noselect">
+        <div class="pop-container">
+            <div class="pop-conts">
+                <table style="width:100%">
+                    <tr>
+                        <td>
+                            <span>항목 ID : </span>
+                            <input type="text" class="inputTable" id="jobId" onfocus="this.select()" placeholder="업무ID" autocomplete="off"/>
+                        </td>
+                        <td>
+                            <span>색상 : </span>
+                            <input title="color picker" type="color" id="boxColor" value="#ff6161"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <textarea id="jobTitle" onfocus="this.select()" cols="60" rows="10" style="width:95%"></textarea>
+                        </td>
+                    </tr>
+                </table>
+                <div class="btn-r">
+                    <a href="#" class="btn-tableAdd">적용</a>
+                    <a href="#" class="btn-layerClose">닫기</a>
+                </div>
+                <!--// content-->
+            </div>
+        </div>
+    </div>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+
+
+
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <div id="jsonLayer" class="pop-layer noselect">
+        <div class="pop-container">
+            <div class="pop-conts">
+                <table style="width:100%">
+                    <tr>
+                        <td colspan="2">
+                            <textarea id="jsonText" onfocus="this.select()" cols="60" rows="10" style="width:95%"></textarea>
+                        </td>
+                    </tr>
+                </table>
+                <div class="btn-r">
+                    <a href="#" class="btn-tableAdd">Json추가</a>
+                    <a href="#" class="btn-layerClose">닫기</a>
+                </div>
+                <!--// content-->
+            </div>
+        </div>
+    </div>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+
+
+
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <div id="fileLayer" class="pop-layer noselect">
+        <div class="pop-container">
+            <div class="pop-conts">
+                <input type="text" class="inputTable" id="saveFileName" onfocus="this.select()" placeholder="파일명" autocomplete="off"/> .CBTrack
+                <div class="btn-r">
+                    <a href="#" class="btn-fileSave">적용</a>
+                    <a href="#" class="btn-layerClose">닫기</a>
+                </div>
+                <!--// content-->
+            </div>
+        </div>
+    </div>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+
+
+
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <div id="imageLayer" class="pop-layer noselect">
+        <div class="pop-container">
+            <div class="pop-conts">
+                <input type="text" class="inputTable" id="saveImageName" onfocus="this.select()" placeholder="img파일명" autocomplete="off" /> .png
+                <div class="btn-r">
+                    <a href="#" class="btn-imageSave">적용</a>
+                    <a href="#" class="btn-layerClose">닫기</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+
+
+
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <div id="searchLayer" class="pop-layer noselect">
+        <div class="pop-container">
+            <div class="pop-conts">
+                <input type="text" class="inputTable" id="searchText" onfocus="this.select()" placeholder="검색어" autocomplete="off"/>
+                <br>
+                <div class="btn-r">
+                    <a href="#" class="btn-searchDo">찾기</a>
+                    <a href="#" class="btn-layerClose">닫기</a>
+                </div>
+                <!--// content-->
+            </div>
+        </div>
+    </div>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+
+
+    <div id="selAllChangeLayer" class="pop-layer noselect">
+        <div class="pop-container">
+            <div class="pop-conts">
+                <input title="color picker" type="color" id="boxColorAll" value="#ff6161"/>
+                <br>
+                <div class="btn-r">
+                    <a href="#" class="btn-allChange">일괄변경</a>
+                    <a href="#" class="btn-layerClose">닫기</a>
+                </div>
+                <!--// content-->
+            </div>
+        </div>
+    </div>
+
+
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <div id="miniMapLayer" class="pop-layer noselect" style="width:812px; height:635px;">
+        <input type="button" value="닫기" id="mapCloseBtn" onclick="$('#miniMapLayer').fadeOut();"/>
+        <canvas id="miniMapCanvas" width='800' height='600' style="position:absolute; left:5px; top:30px; border:solid 1px #000000; z-index:1;"></canvas>
+    </div>
+    <!--////////////////////////////////////////////////////////////////////////////////////////-->
+    <script>
+        function fileSavePopup(){
+            let $el         = $("#fileLayer");
+            let $elWidth    = $el.outerWidth();
+            let $elHeight   = $el.outerHeight();
+            let docWidth    = $(document).width();
+            let docHeight   = $(document).height();
+            $el.fadeIn();
+            if ($elHeight < docHeight || $elWidth < docWidth) {
+                $el.css({
+                    marginTop   : -$elHeight / 2,
+                    marginLeft  : -$elWidth  / 2
+                });
+            } else {
+                $el.css({top: 0, left: 0});
+            }
+            $("#saveFileName").focus();
+            $("#saveFileName").val(curFileName);
+            layerName = "#fileLayer";
+        }
+        function imgSavePopup(){
+            let $el         = $("#imageLayer");
+            let $elWidth    = $el.outerWidth();
+            let $elHeight   = $el.outerHeight();
+            let docWidth    = $(document).width();
+            let docHeight   = $(document).height();
+            $el.fadeIn();
+            if ($elHeight < docHeight || $elWidth < docWidth) {
+                $el.css({
+                    marginTop   : -$elHeight / 2,
+                    marginLeft  : -$elWidth  / 2
+                });
+            } else {
+                $el.css({top: 0, left: 0});
+            }
+            $("#saveImageName").focus();
+            $("#saveImageName").val('');
+            layerName = "#imageLayer";
+        }
+        function searchPopup(){
+            let $el         = $("#searchLayer");
+            let $elWidth    = $el.outerWidth();
+            let $elHeight   = $el.outerHeight();
+            let docWidth    = $(document).width();
+            let docHeight   = $(document).height();
+            $el.fadeIn();
+            if ($elHeight < docHeight || $elWidth < docWidth) {
+                $el.css({
+                    marginTop   : -$elHeight / 2,
+                    marginLeft  : -$elWidth  / 2
+                });
+            } else {
+                $el.css({top: 0, left: 0});
+            }
+            $("#searchText").focus();
+            layerName = "#searchLayer";
+        }
+        function allChangePop(){
+            let $el         = $("#selAllChangeLayer");
+            let $elWidth    = $el.outerWidth();
+            let $elHeight   = $el.outerHeight();
+            let docWidth    = $(document).width();
+            let docHeight   = $(document).height();
+            $el.fadeIn();
+            if ($elHeight < docHeight || $elWidth < docWidth) {
+                $el.css({
+                    marginTop   : -$elHeight / 2,
+                    marginLeft  : -$elWidth  / 2
+                });
+            } else {
+                $el.css({top: 0, left: 0});
+            }
+            //$("#searchText").focus();
+            layerName = "#selAllChangeLayer";
+        }
+        function showMap(){
+            let $el         = $("#miniMapLayer");
+            let $elWidth    = $el.outerWidth();
+            let $elHeight   = $el.outerHeight();
+            let docWidth    = $(document).width();
+            let docHeight   = $(document).height();
+            $el.fadeIn();
+            if ($elHeight < docHeight || $elWidth < docWidth) {
+                $el.css({
+                    marginTop   : -$elHeight / 2,
+                    marginLeft  : -$elWidth  / 2
+                });
+            } else {
+                $el.css({top: 0, left: 0});
+            }
+
+            let canvas  = document.getElementById('miniMapCanvas');
+            
+            let dc      = canvas.getContext('2d');
+            let cWidth  = document.getElementById('miniMapCanvas').width;
+            let cHeight = document.getElementById('miniMapCanvas').height;
+            const hasMouseDownEvent = canvas.onmousedown !== null;
+            if(!hasMouseDownEvent){
+                canvas.addEventListener("mousedown", function(e){ screenDesigner.miniMapMouseDown(e, dc); });
+            }
+            screenDesigner.drawMiniMap(dc, cWidth, cHeight);
+            layerName = "#miniMapLayer";
+        }
+        
+        function jsonJob(){
+            let $el         = $("#jsonLayer");
+            let $elWidth    = $el.outerWidth();
+            let $elHeight   = $el.outerHeight();
+            let docWidth    = $(document).width();
+            let docHeight   = $(document).height();
+            $el.fadeIn();
+            isEditMode      = true;
+            if ($elHeight < docHeight || $elWidth < docWidth) {
+                $el.css({
+                    marginTop   : -$elHeight / 2,
+                    marginLeft  : -$elWidth  / 2
+                });
+            } else {
+                $el.css({top: 0, left: 0});
+            }
+            $("#jsonText").val(screenDesigner.getJsonText());
+            layerName = "#jsonLayer";
+        }
+        function FileSave(fileName){
+            curFileName     = fileName;
+            document.title  = fileName;
+            fileName        = fileName + ".CBTrack";
+            let textPlan    = "text/plain";  // "application/json";
+            let jsonData = screenDesigner.getJsonData();
+            //console.log(JSON.stringify(jsonData));
+            download(fileName,JSON.stringify(jsonData), textPlan);
+            setScreenLock(true);
+        }
+        function ImageSave(fileName){
+            const image = document.getElementById("charvesCanvas").toDataURL();
+            const link = document.createElement("a");
+            link.href = image;
+            link.download = fileName;
+            link.click();
+        }
+        function download(filename, data, type) {
+            var file = new Blob([data], {type: type});
+            if (window.navigator.msSaveOrOpenBlob) // IE10+
+                window.navigator.msSaveOrOpenBlob(file, filename);
+            else { // Others
+                var a = document.createElement("a"),
+                url = URL.createObjectURL(file);
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function() {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);  
+                }, 0); 
+            }
+        }
+
+        function loadImgFile(x, y){
+            var input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".png;.jpg;.gif";
+            input.click();
+            input.onchange = function (event) {
+                loadFromImgFile(event.target.files[0], x, y);
+            };
+        }
+        function loadFromImgFile(fileInfo, x, y){
+            let img = new Image();
+            img.src = URL.createObjectURL(fileInfo);
+            img.onload = () =>{
+                newImageAdd(img, x, y);
+            };
+        }
+        function loadFile(){
+            var input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".CBTrack";
+            input.click();
+            input.onchange = function (event) {
+                loadFromFile(event.target.files[0]);
+            };
+        }
+        function loadFromFile(file){
+            var reader = new FileReader();
+            reader.readAsText(file,"utf-8");
+            reader.onload = function () {
+                let jsonObj = JSON.parse(reader.result);
+                if(screenDesigner == null){
+                    charvesCanvas = document.getElementById("charvesCanvas");
+                    dc = charvesCanvas.getContext('2d');
+                    screenDesigner = new ScreenDesigner('charvesCanvas');
+                    screenDesigner.dc = dc;
+                    screenDesigner.gridColor = '#969696';
+                }
+                screenDesigner.loadFromJson(jsonObj);
+                setScreenLock(true);
+                let dotIdx = file.name.lastIndexOf(".");
+                if(dotIdx > 0){
+                    document.title = file.name.substring(0,dotIdx);
+                    curFileName = file.name.substring(0,dotIdx);
+                }else{
+                    document.title = file.name;
+                    curFileName = file.name;
+                }
+            };
+        }
+        function newBoxAdd(){
+            let color           = '#DFDFDF';
+            let snap            = screenDesigner.snap;
+            let canvasWidth     = $('#charvesCanvas').width();
+            let canvasHeight    = $('#charvesCanvas').height();
+            let xPoint          = Math.floor((canvasWidth / 2 - 110)/snap) * snap;
+            let yPoint          = Math.floor((canvasHeight / 2 - 20)/snap) * snap;
+            let addResult       = screenDesigner.addBiBox('신규노드'
+                                                        , S2R_X(xPoint)
+                                                        , S2R_Y(yPoint) 
+                                                        , 240
+                                                        , 40
+                                                        , color
+                                                        , null
+                                                        );
+            // console.log(addResult);
+            screenDesigner.drawAll();
+        }
+        function newImageAdd(imgData, x, y){
+            let snap            = screenDesigner.snap;
+            let canvasWidth     = $('#charvesCanvas').width();
+            let canvasHeight    = $('#charvesCanvas').height();
+            // let xPoint          = Math.floor((canvasWidth / 2 - 110)/snap) * snap;
+            // let yPoint          = Math.floor((canvasHeight / 2 - 20)/snap) * snap;
+            let addResult       = screenDesigner.addBiImage(imgData
+                                                        , x
+                                                        , y
+                                                        , 320
+                                                        , 160
+                                                        , null
+                                                        );
+            screenDesigner.drawAll();
+        }
+        function newGroupAdd(){
+            let color           = '#c8c8c8';
+            let snap            = screenDesigner.snap;
+            let canvasWidth     = $('#charvesCanvas').width();
+            let canvasHeight    = $('#charvesCanvas').height();
+            let xPoint          = Math.floor((canvasWidth / 2 - 110)/snap) * snap;
+            let yPoint          = Math.floor((canvasHeight / 2 - 20)/snap) * snap;
+            let addResult       = screenDesigner.addBiGroup('신규그룹'
+                                                        , S2R_X(xPoint)
+                                                        , S2R_Y(yPoint) 
+                                                        , 320
+                                                        , 80
+                                                        , color
+                                                        , null
+                                                        );
+            addResult.dataInfo.draw(dc, false);
+            screenDesigner.drawAll();
+        }
+        function delBox(){
+            if(( Object.keys(screenDesigner.selNodes).length
+               + Object.keys(screenDesigner.selGroups).length
+               + Object.keys(screenDesigner.selLinks).length) <= 0) return;
+            if(!confirm("진짜 지워여?")) return;
+            screenDesigner.deleteSelItems();
+            screenDesigner.drawAll();
+        }
+        function copySelect(){
+            screenDesigner.copySelectedBox();
+        }
+        function resetScreen(){
+            var w = 0, h = 0;
+            if (typeof (window.innerWidth) == 'number') { //Chrome
+                w = window.innerWidth;
+                h = window.innerHeight;
+            } else if (document.documentElement && (document.documentElement.clientWidth || document.documentElement.clientHeight)) {
+                w = document.documentElement.clientWidth;
+                h = document.documentElement.clientHeight;
+            } else if (document.body && (document.body.clientWidth || document.body.clientHeight)) { //IE9
+                w = document.body.clientWidth;
+                h = document.body.clientHeight;
+            }
+            charvesCanvas = document.getElementById("charvesCanvas");
+            charvesCanvas.width = w-4;
+            charvesCanvas.height = h-4;
+            screenDesigner.drawAll();
+        }
+
+        function setScreenLock(mode){
+            SD_Env.isEditable = !mode;
+            if(mode){       // 편집 잠금
+                $('#menuBar').hide();
+                $('#readOnlyBar').show();
+                $('#leftMenuLock').show();
+            }else{          // 잠금 해제
+                $('#readOnlyBar').hide();
+                $('#menuBar').show();
+                $('#leftMenuLock').hide();
+            }
+        }
+		
+		function test(){
+			swal({
+				text : "텍스트",
+				closeOnClickOutside : false // 백그라운드 클릭해도 안꺼짐
+			})
+			.then(function(result){ //  창 꺼질때 실행할 함수
+				console.log(result);
+				// background 클릭 => null
+				// 확인버튼 클릭 => true
+				
+				if(result) {
+					location.href = "/";
+				}
+				
+			})
+		}
+    </script>
+</body>
+
+</html>
